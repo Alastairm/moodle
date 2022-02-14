@@ -46,7 +46,10 @@ class enrol_database_plugin extends enrol_plugin {
         if (!enrol_is_enabled('database')) {
             return true;
         }
-        if (!$this->get_config('dbtype') or !$this->get_config('remoteenroltable') or !$this->get_config('remotecoursefield') or !$this->get_config('remoteuserfield')) {
+        if (!$this->get_config('dbtype')
+                or !$this->get_config('remoteenroltable')
+                or !$this->get_config('remotecoursefield')
+                or !$this->get_config('remoteuserfield')) {
             return true;
         }
 
@@ -104,9 +107,9 @@ class enrol_database_plugin extends enrol_plugin {
         $otheruserfield   = trim($this->get_config('remoteotheruserfield'));
 
         // Lowercased versions - necessary because we normalise the resultset with array_change_key_case().
-        $coursefield_l    = strtolower($coursefield);
-        $userfield_l      = strtolower($userfield);
-        $rolefield_l      = strtolower($rolefield);
+        $coursefieldlower    = strtolower($coursefield);
+        $userfieldlower      = strtolower($userfield);
+        $rolefieldlower      = strtolower($rolefield);
         $otheruserfieldlower = strtolower($otheruserfield);
 
         $localrolefield   = $this->get_config('localrolefield');
@@ -124,7 +127,7 @@ class enrol_database_plugin extends enrol_plugin {
 
         if (!property_exists($user, $localuserfield)) {
             debugging('Invalid $user parameter in sync_user_enrolments(), missing '.$localuserfield);
-            $user = $DB->get_record('user', array('id'=>$user->id));
+            $user = $DB->get_record('user', ['id' => $user->id]);
         }
 
         // Create roles mapping.
@@ -132,14 +135,14 @@ class enrol_database_plugin extends enrol_plugin {
         if (!isset($allroles[$defaultrole])) {
             $defaultrole = 0;
         }
-        $roles = array();
+        $roles = [];
         foreach ($allroles as $role) {
             $roles[$role->$localrolefield] = $role->id;
         }
 
-        $roleassigns = array();
-        $enrols = array();
-        $instances = array();
+        $roleassigns = [];
+        $enrols = [];
+        $instances = [];
 
         if (!$extdb = $this->db_init()) {
             // Can not connect to database, sorry.
@@ -147,7 +150,7 @@ class enrol_database_plugin extends enrol_plugin {
         }
 
         // Read remote enrols and create instances.
-        $sql = $this->db_get_sql($table, array($userfield=>$user->$localuserfield), array(), false);
+        $sql = $this->db_get_sql($table, [$userfield => $user->$localuserfield], [], false);
 
         if ($rs = $extdb->Execute($sql)) {
             if (!$rs->EOF) {
@@ -155,25 +158,25 @@ class enrol_database_plugin extends enrol_plugin {
                     $fields = array_change_key_case($fields, CASE_LOWER);
                     $fields = $this->db_decode($fields);
 
-                    if (empty($fields[$coursefield_l])) {
+                    if (empty($fields[$coursefieldlower])) {
                         // Missing course info.
                         continue;
                     }
-                    if (!$course = $DB->get_record('course', array($localcoursefield=>$fields[$coursefield_l]), 'id,visible')) {
+                    if (!$course = $DB->get_record('course', [$localcoursefield => $fields[$coursefieldlower]], 'id,visible')) {
                         continue;
                     }
                     if (!$course->visible and $ignorehidden) {
                         continue;
                     }
 
-                    if (empty($fields[$rolefield_l]) or !isset($roles[$fields[$rolefield_l]])) {
+                    if (empty($fields[$rolefieldlower]) or !isset($roles[$fields[$rolefieldlower]])) {
                         if (!$defaultrole) {
                             // Role is mandatory.
                             continue;
                         }
                         $roleid = $defaultrole;
                     } else {
-                        $roleid = $roles[$fields[$rolefield_l]];
+                        $roleid = $roles[$fields[$rolefieldlower]];
                     }
 
                     $roleassigns[$course->id][$roleid] = $roleid;
@@ -181,13 +184,14 @@ class enrol_database_plugin extends enrol_plugin {
                         $enrols[$course->id][$roleid] = $roleid;
                     }
 
-                    if ($instance = $DB->get_record('enrol', array('courseid'=>$course->id, 'enrol'=>'database'), '*', IGNORE_MULTIPLE)) {
+                    if ($instance = $DB->get_record('enrol', ['courseid' => $course->id, 'enrol' => 'database'],
+                            '*', IGNORE_MULTIPLE)) {
                         $instances[$course->id] = $instance;
                         continue;
                     }
 
                     $enrolid = $this->add_instance($course);
-                    $instances[$course->id] = $DB->get_record('enrol', array('id'=>$enrolid));
+                    $instances[$course->id] = $DB->get_record('enrol', ['id' => $enrolid]);
                 }
             }
             $rs->Close();
@@ -207,7 +211,7 @@ class enrol_database_plugin extends enrol_plugin {
             $instance = $instances[$courseid];
 
             if (isset($enrols[$courseid])) {
-                if ($e = $DB->get_record('user_enrolments', array('userid' => $user->id, 'enrolid' => $instance->id))) {
+                if ($e = $DB->get_record('user_enrolments', ['userid' => $user->id, 'enrolid' => $instance->id])) {
                     // Reenable enrolment when previously disable enrolment refreshed.
                     if ($e->status == ENROL_USER_SUSPENDED) {
                         $this->update_user_enrol($instance, $user->id, ENROL_USER_ACTIVE);
@@ -222,9 +226,13 @@ class enrol_database_plugin extends enrol_plugin {
                 // Weird.
                 continue;
             }
-            $current = $DB->get_records('role_assignments', array('contextid'=>$context->id, 'userid'=>$user->id, 'component'=>'enrol_database', 'itemid'=>$instance->id), '', 'id, roleid');
+            $current = $DB->get_records('role_assignments',
+                ['contextid' => $context->id, 'userid' => $user->id, 'component' => 'enrol_database', 'itemid' => $instance->id],
+                '',
+                'id, roleid'
+            );
 
-            $existing = array();
+            $existing = [];
             foreach ($current as $r) {
                 if (isset($roles[$r->roleid])) {
                     $existing[$r->roleid] = $r->roleid;
@@ -246,7 +254,7 @@ class enrol_database_plugin extends enrol_plugin {
                   JOIN {role_assignments} ra ON ra.itemid = e.id
              LEFT JOIN {user_enrolments} ue ON ue.enrolid = e.id AND ue.userid = ra.userid
                  WHERE ra.userid = :userid AND e.enrol = 'database'";
-        $rs = $DB->get_recordset_sql($sql, array('userid' => $user->id));
+        $rs = $DB->get_recordset_sql($sql, ['userid' => $user->id]);
         foreach ($rs as $instance) {
             if (!$instance->cvisible and $ignorehidden) {
                 continue;
@@ -279,7 +287,14 @@ class enrol_database_plugin extends enrol_plugin {
                         // We want this "other user" to keep their roles.
                         continue;
                     }
-                    role_unassign_all(array('contextid'=>$context->id, 'userid'=>$user->id, 'component'=>'enrol_database', 'itemid'=>$instance->id));
+                    role_unassign_all(
+                        [
+                            'contextid' => $context->id,
+                            'userid' => $user->id,
+                            'component' => 'enrol_database',
+                            'itemid' => $instance->id
+                        ]
+                    );
                 }
             }
         }
@@ -322,9 +337,9 @@ class enrol_database_plugin extends enrol_plugin {
         $otheruserfield   = trim($this->get_config('remoteotheruserfield'));
 
         // Lowercased versions - necessary because we normalise the resultset with array_change_key_case().
-        $coursefield_l    = strtolower($coursefield);
-        $userfield_l      = strtolower($userfield);
-        $rolefield_l      = strtolower($rolefield);
+        $coursefieldlower    = strtolower($coursefield);
+        $userfieldlower      = strtolower($userfield);
+        $rolefieldlower      = strtolower($rolefield);
         $otheruserfieldlower = strtolower($otheruserfield);
 
         $localrolefield   = $this->get_config('localrolefield');
@@ -339,7 +354,7 @@ class enrol_database_plugin extends enrol_plugin {
         if (!isset($allroles[$defaultrole])) {
             $defaultrole = 0;
         }
-        $roles = array();
+        $roles = [];
         foreach ($allroles as $role) {
             $roles[$role->$localrolefield] = $role->id;
         }
@@ -349,7 +364,7 @@ class enrol_database_plugin extends enrol_plugin {
                       FROM {course} c
                  LEFT JOIN {enrol} e ON (e.courseid = c.id AND e.enrol = 'database')
                      WHERE c.id = :id";
-            if (!$course = $DB->get_record_sql($sql, array('id'=>$onecourse))) {
+            if (!$course = $DB->get_record_sql($sql, ['id' => $onecourse])) {
                 // Course does not exist, nothing to sync.
                 return 0;
             }
@@ -360,7 +375,7 @@ class enrol_database_plugin extends enrol_plugin {
             if (empty($course->enrolid)) {
                 $course->enrolid = $this->add_instance($course);
             }
-            $existing = array($course->mapping=>$course);
+            $existing = [$course->mapping => $course];
 
             // Feel free to unenrol everybody, no safety tricks here.
             $preventfullunenrol = false;
@@ -369,8 +384,8 @@ class enrol_database_plugin extends enrol_plugin {
 
         } else {
             // Get a list of courses to be synced that are in external table.
-            $externalcourses = array();
-            $sql = $this->db_get_sql($table, array(), array($coursefield), true);
+            $externalcourses = [];
+            $sql = $this->db_get_sql($table, [], [$coursefield], true);
             if ($rs = $extdb->Execute($sql)) {
                 if (!$rs->EOF) {
                     while ($mapping = $rs->FetchRow()) {
@@ -395,7 +410,7 @@ class enrol_database_plugin extends enrol_plugin {
             }
 
             // First find all existing courses with enrol instance.
-            $existing = array();
+            $existing = [];
             $sql = "SELECT c.id, c.visible, c.$localcoursefield AS mapping, e.id AS enrolid, c.shortname
                       FROM {course} c
                       JOIN {enrol} e ON (e.courseid = c.id AND e.enrol = 'database')";
@@ -410,7 +425,7 @@ class enrol_database_plugin extends enrol_plugin {
             $rs->close();
 
             // Add necessary enrol instances that are not present yet.
-            $params = array();
+            $params = [];
             $localnotempty = "";
             if ($localcoursefield !== 'id') {
                 $localnotempty =  "AND c.$localcoursefield <> :lcfe";
@@ -449,33 +464,43 @@ class enrol_database_plugin extends enrol_plugin {
         }
 
         // Sync user enrolments.
-        $sqlfields = array($userfield);
+        $sqlfields = [$userfield, $coursefield];
         if ($rolefield) {
             $sqlfields[] = $rolefield;
         }
         if ($otheruserfield) {
             $sqlfields[] = $otheruserfield;
         }
+        $remoteenrols = [];
+        $sql = $this->db_get_sql($table, [], $sqlfields);
+        if ($rs = $extdb->Execute($sql)) {
+            if (!$rs->EOF) {
+                while ($fields = $rs->FetchRow()) {
+                    $fields = array_change_key_case($fields, CASE_LOWER);
+                    $remoteenrols[$fields[$coursefieldlower]][] = $fields;
+                }
+            }
+        }
         foreach ($existing as $course) {
             if ($ignorehidden and !$course->visible) {
                 continue;
             }
-            if (!$instance = $DB->get_record('enrol', array('id'=>$course->enrolid))) {
+            if (!$instance = $DB->get_record('enrol', ['id' => $course->enrolid])) {
                 continue; // Weird!
             }
             $context = context_course::instance($course->id);
 
             // Get current list of enrolled users with their roles.
-            $currentroles  = array();
-            $currentenrols = array();
-            $currentstatus = array();
-            $usermapping   = array();
+            $currentroles  = [];
+            $currentenrols = [];
+            $currentstatus = [];
+            $usermapping   = [];
             $sql = "SELECT u.$localuserfield AS mapping, u.id AS userid, ue.status, ra.roleid
                       FROM {user} u
                       JOIN {role_assignments} ra ON (ra.userid = u.id AND ra.component = 'enrol_database' AND ra.itemid = :enrolid)
                  LEFT JOIN {user_enrolments} ue ON (ue.userid = u.id AND ue.enrolid = ra.itemid)
                      WHERE u.deleted = 0";
-            $params = array('enrolid'=>$instance->id);
+            $params = ['enrolid' => $instance->id];
             if ($localuserfield === 'username') {
                 $sql .= " AND u.mnethostid = :mnethostid";
                 $params['mnethostid'] = $CFG->mnet_localhost_id;
@@ -493,50 +518,53 @@ class enrol_database_plugin extends enrol_plugin {
             $rs->close();
 
             // Get list of users that need to be enrolled and their roles.
-            $requestedroles  = array();
-            $requestedenrols = array();
-            $sql = $this->db_get_sql($table, array($coursefield=>$course->mapping), $sqlfields);
-            if ($rs = $extdb->Execute($sql)) {
-                if (!$rs->EOF) {
-                    $usersearch = array('deleted' => 0);
-                    if ($localuserfield === 'username') {
-                        $usersearch['mnethostid'] = $CFG->mnet_localhost_id;
+            $requestedroles  = [];
+            $requestedenrols = [];
+            if (!empty($remoteenrols[$course->mapping])) {
+                $remoteenrol = $remoteenrols[$course->mapping];
+                $usersearch = ['deleted' => 0];
+                if ($localuserfield === 'username') {
+                    $usersearch['mnethostid'] = $CFG->mnet_localhost_id;
+                }
+                foreach ($remoteenrol as $remoteenroluser) {
+                    $fields = array_change_key_case($remoteenroluser, CASE_LOWER);
+                    if (empty($fields[$userfieldlower])) {
+                        $trace->output("error: skipping user without mandatory $localuserfield in course '$course->mapping'", 1);
+                        continue;
                     }
-                    while ($fields = $rs->FetchRow()) {
-                        $fields = array_change_key_case($fields, CASE_LOWER);
-                        if (empty($fields[$userfield_l])) {
-                            $trace->output("error: skipping user without mandatory $localuserfield in course '$course->mapping'", 1);
+                    $mapping = $fields[$userfieldlower];
+                    if (!isset($usermapping[$mapping])) {
+                        $usersearch[$localuserfield] = $mapping;
+                        if (!$user = $DB->get_record('user', $usersearch, 'id', IGNORE_MULTIPLE)) {
+                            $trace->output(
+                                "error: skipping unknown user $localuserfield '$mapping' in course '$course->mapping'",
+                                1
+                            );
                             continue;
                         }
-                        $mapping = $fields[$userfield_l];
-                        if (!isset($usermapping[$mapping])) {
-                            $usersearch[$localuserfield] = $mapping;
-                            if (!$user = $DB->get_record('user', $usersearch, 'id', IGNORE_MULTIPLE)) {
-                                $trace->output("error: skipping unknown user $localuserfield '$mapping' in course '$course->mapping'", 1);
-                                continue;
-                            }
-                            $usermapping[$mapping] = $user->id;
-                            $userid = $user->id;
-                        } else {
-                            $userid = $usermapping[$mapping];
+                        $usermapping[$mapping] = $user->id;
+                        $userid = $user->id;
+                    } else {
+                        $userid = $usermapping[$mapping];
+                    }
+                    if (empty($fields[$rolefieldlower]) or !isset($roles[$fields[$rolefieldlower]])) {
+                        if (!$defaultrole) {
+                            $trace->output(
+                                "error: skipping user '$userid' in course '$course->mapping' - missing course and default role",
+                                1
+                            );
+                            continue;
                         }
-                        if (empty($fields[$rolefield_l]) or !isset($roles[$fields[$rolefield_l]])) {
-                            if (!$defaultrole) {
-                                $trace->output("error: skipping user '$userid' in course '$course->mapping' - missing course and default role", 1);
-                                continue;
-                            }
-                            $roleid = $defaultrole;
-                        } else {
-                            $roleid = $roles[$fields[$rolefield_l]];
-                        }
+                        $roleid = $defaultrole;
+                    } else {
+                        $roleid = $roles[$fields[$rolefieldlower]];
+                    }
 
-                        $requestedroles[$userid][$roleid] = $roleid;
-                        if (empty($fields[$otheruserfieldlower])) {
-                            $requestedenrols[$userid][$roleid] = $roleid;
-                        }
+                    $requestedroles[$userid][$roleid] = $roleid;
+                    if (empty($fields[$otheruserfieldlower])) {
+                        $requestedenrols[$userid][$roleid] = $roleid;
                     }
                 }
-                $rs->Close();
             } else {
                 $trace->output("error: skipping course '$course->mapping' - could not match with external database", 1);
                 continue;
@@ -587,7 +615,7 @@ class enrol_database_plugin extends enrol_plugin {
             foreach ($currentroles as $userid => $userroles) {
                 // These are roles that exist only in Moodle, not the external database
                 // so make sure the unenrol actions will handle them by setting status.
-                $currentstatus += array($userid => ENROL_USER_ACTIVE);
+                $currentstatus += [$userid => ENROL_USER_ACTIVE];
             }
 
             // Deal with enrolments removed from external table.
@@ -621,7 +649,14 @@ class enrol_database_plugin extends enrol_plugin {
                             // We want this "other user" to keep their roles.
                             continue;
                         }
-                        role_unassign_all(array('contextid'=>$context->id, 'userid'=>$userid, 'component'=>'enrol_database', 'itemid'=>$instance->id));
+                        role_unassign_all(
+                            [
+                                'contextid' => $context->id,
+                                'userid' => $userid,
+                                'component' => 'enrol_database',
+                                'itemid' => $instance->id
+                            ]
+                        );
 
                         $trace->output("unsassigning all roles: $userid ==> $course->shortname", 1);
                     }
@@ -676,63 +711,77 @@ class enrol_database_plugin extends enrol_plugin {
         $category  = trim($this->get_config('newcoursecategory'));
 
         // Lowercased versions - necessary because we normalise the resultset with array_change_key_case().
-        $fullname_l  = strtolower($fullname);
-        $shortname_l = strtolower($shortname);
-        $idnumber_l  = strtolower($idnumber);
-        $category_l  = strtolower($category);
+        $fullnamelower  = strtolower($fullname);
+        $shortnamelower = strtolower($shortname);
+        $idnumberlower  = strtolower($idnumber);
+        $categorylower  = strtolower($category);
 
         $localcategoryfield = $this->get_config('localcategoryfield', 'id');
         $defaultcategory    = $this->get_config('defaultcategory');
 
-        if (!$DB->record_exists('course_categories', array('id'=>$defaultcategory))) {
+        if (!$DB->record_exists('course_categories', ['id' => $defaultcategory])) {
             $trace->output("default course category does not exist!", 1);
             $categories = $DB->get_records('course_categories', array(), 'sortorder', 'id', 0, 1);
             $first = reset($categories);
             $defaultcategory = $first->id;
         }
 
-        $sqlfields = array($fullname, $shortname);
+        $sqlfields = [$fullname, $shortname];
         if ($category) {
             $sqlfields[] = $category;
         }
         if ($idnumber) {
             $sqlfields[] = $idnumber;
         }
-        $sql = $this->db_get_sql($table, array(), $sqlfields, true);
-        $createcourses = array();
+        $sql = $this->db_get_sql($table, [], $sqlfields, true);
+        $createcourses = [];
         if ($rs = $extdb->Execute($sql)) {
             if (!$rs->EOF) {
                 while ($fields = $rs->FetchRow()) {
                     $fields = array_change_key_case($fields, CASE_LOWER);
                     $fields = $this->db_decode($fields);
-                    if (empty($fields[$shortname_l]) or empty($fields[$fullname_l])) {
-                        $trace->output('error: invalid external course record, shortname and fullname are mandatory: ' . json_encode($fields), 1); // Hopefully every geek can read JS, right?
+                    if (empty($fields[$shortnamelower]) or empty($fields[$fullnamelower])) {
+                        $trace->output(
+                            'error: invalid external course record, shortname and fullname are mandatory: ' . json_encode($fields),
+                            1
+                        ); // Hopefully every geek can read JS, right?
                         continue;
                     }
-                    if ($DB->record_exists('course', array('shortname'=>$fields[$shortname_l]))) {
+                    if ($DB->record_exists('course', ['shortname' => $fields[$shortnamelower]])) {
                         // Already exists, skip.
                         continue;
                     }
                     // Allow empty idnumber but not duplicates.
-                    if ($idnumber and $fields[$idnumber_l] !== '' and $fields[$idnumber_l] !== null and $DB->record_exists('course', array('idnumber'=>$fields[$idnumber_l]))) {
-                        $trace->output('error: duplicate idnumber, can not create course: '.$fields[$shortname_l].' ['.$fields[$idnumber_l].']', 1);
+                    if ($idnumber
+                            and $fields[$idnumberlower] !== ''
+                            and $fields[$idnumberlower] !== null
+                            and $DB->record_exists('course', ['idnumber' => $fields[$idnumberlower]])) {
+                        $trace->output(
+                            'error: duplicate idnumber, can not create course: '.$fields[$shortnamelower].
+                            ' ['.$fields[$idnumberlower].']',
+                            1
+                        );
                         continue;
                     }
                     $course = new stdClass();
-                    $course->fullname  = $fields[$fullname_l];
-                    $course->shortname = $fields[$shortname_l];
-                    $course->idnumber  = $idnumber ? $fields[$idnumber_l] : '';
+                    $course->fullname  = $fields[$fullnamelower];
+                    $course->shortname = $fields[$shortnamelower];
+                    $course->idnumber  = $idnumber ? $fields[$idnumberlower] : '';
                     if ($category) {
-                        if (empty($fields[$category_l])) {
+                        if (empty($fields[$categorylower])) {
                             // Empty category means use default.
                             $course->category = $defaultcategory;
-                        } else if ($coursecategory = $DB->get_record('course_categories', array($localcategoryfield=>$fields[$category_l]), 'id')) {
+                        } else if ($coursecategory =
+                                $DB->get_record('course_categories', [$localcategoryfield => $fields[$categorylower]], 'id')) {
                             // Yay, correctly specified category!
                             $course->category = $coursecategory->id;
                             unset($coursecategory);
                         } else {
                             // Bad luck, better not continue because unwanted ppl might get access to course in different category.
-                            $trace->output('error: invalid category '.$localcategoryfield.', can not create course: '.$fields[$shortname_l], 1);
+                            $trace->output(
+                                'error: invalid category '.$localcategoryfield.', can not create course: '.$fields[$shortnamelower],
+                                1
+                            );
                             continue;
                         }
                     } else {
@@ -755,7 +804,7 @@ class enrol_database_plugin extends enrol_plugin {
 
             $template = false;
             if ($templatecourse) {
-                if ($template = $DB->get_record('course', array('shortname'=>$templatecourse))) {
+                if ($template = $DB->get_record('course', ['shortname' => $templatecourse])) {
                     $template = fullclone(course_get_format($template)->get_course());
                     if (!isset($template->numsections)) {
                         $template->numsections = course_get_format($template)->get_last_section_number();
@@ -800,10 +849,10 @@ class enrol_database_plugin extends enrol_plugin {
 
                 // Detect duplicate data once again, above we can not find duplicates
                 // in external data using DB collation rules...
-                if ($DB->record_exists('course', array('shortname' => $newcourse->shortname))) {
+                if ($DB->record_exists('course', ['shortname' => $newcourse->shortname])) {
                     $trace->output("can not insert new course, duplicate shortname detected: ".$newcourse->shortname, 1);
                     continue;
-                } else if (!empty($newcourse->idnumber) and $DB->record_exists('course', array('idnumber' => $newcourse->idnumber))) {
+                } else if (!empty($newcourse->idnumber) and $DB->record_exists('course', ['idnumber' => $newcourse->idnumber])) {
                     $trace->output("can not insert new course, duplicate idnumber detected: ".$newcourse->idnumber, 1);
                     continue;
                 }
@@ -826,7 +875,7 @@ class enrol_database_plugin extends enrol_plugin {
 
     protected function db_get_sql($table, array $conditions, array $fields, $distinct = false, $sort = "") {
         $fields = $fields ? implode(',', $fields) : "*";
-        $where = array();
+        $where = [];
         if ($conditions) {
             foreach ($conditions as $key=>$value) {
                 $value = $this->db_encode($this->db_addslashes($value));
@@ -881,7 +930,7 @@ class enrol_database_plugin extends enrol_plugin {
         // Use custom made function for now - it is better to not rely on adodb or php defaults.
         if ($this->get_config('dbsybasequoting')) {
             $text = str_replace('\\', '\\\\', $text);
-            $text = str_replace(array('\'', '"', "\0"), array('\\\'', '\\"', '\\0'), $text);
+            $text = str_replace(['\'', '"', "\0"], ['\\\'', '\\"', '\\0'], $text);
         } else {
             $text = str_replace("'", "''", $text);
         }
@@ -938,7 +987,7 @@ class enrol_database_plugin extends enrol_plugin {
     public function restore_instance(restore_enrolments_structure_step $step, stdClass $data, $course, $oldid) {
         global $DB;
 
-        if ($instance = $DB->get_record('enrol', array('courseid'=>$course->id, 'enrol'=>$this->get_name()))) {
+        if ($instance = $DB->get_record('enrol', ['courseid' => $course->id, 'enrol' => $this->get_name()])) {
             $instanceid = $instance->id;
         } else {
             $instanceid = $this->add_instance($course);
@@ -962,7 +1011,7 @@ class enrol_database_plugin extends enrol_plugin {
             // Enrolments were already synchronised in restore_instance(), we do not want any suspended leftovers.
             return;
         }
-        if (!$DB->record_exists('user_enrolments', array('enrolid'=>$instance->id, 'userid'=>$userid))) {
+        if (!$DB->record_exists('user_enrolments', ['enrolid' => $instance->id, 'userid' => $userid])) {
             $this->enrol_user($instance, $userid, null, 0, 0, ENROL_USER_SUSPENDED);
         }
     }
